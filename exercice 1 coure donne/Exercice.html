@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Exercice — Wikidata + RAWGraphs</title>
+  <style>
+    :root { --border:#e5e7eb; --bg:#f8fafc; --text:#0f172a; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: var(--text); margin: 24px; }
+    header { margin-bottom: 18px; }
+    h1 { font-size: 24px; margin: 0 0 6px; }
+    p { margin: 0; color:#334155; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+    .card { border: 1px solid var(--border); border-radius: 14px; background: white; padding: 14px; }
+    .card h2 { font-size: 18px; margin: 0 0 10px; }
+    .viz {
+      width: 100%;
+      height: 560px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--bg);
+    }
+    .note { font-size: 14px; color:#475569; margin-top: 10px; line-height: 1.4; }
+    code { background:#f1f5f9; padding: 2px 6px; border-radius: 6px; }
+    footer { margin-top: 18px; font-size: 14px; color:#64748b; }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>Enfant le plus célèbre d'un bibliothécaire</h1>
+  </header>
+
+  <main class="grid">
+
+    <!-- 1) WIKIDATA QUERY SERVICE -->
+    <section class="card">
+      <h2>Graphique 1 — Wikidata Query Service</h2>
+
+      <div class="viz">
+        <iframe style="width: 80vw; height: 50vh; border: none;" src="https://query.wikidata.org/embed.html#%23Enfant%20le%20plus%20c%C3%A9l%C3%A8bre%20d'un%20biblioth%C3%A9caire%0A%23%20----%0A%23Children%20of%20librarians%20with%20the%20most%20number%20of%20sitelinks%20(as%20a%20proxy%20for%20fame)%0ASELECT%20%3Fperson%20%3FpersonLabel%20%3Flinkcount%20WHERE%20%7B%0A%20%20%3Fparent%20wdt%3AP106%20wd%3AQ182436%3B%0A%20%20%20%20wdt%3AP40%20%3Fperson.%0A%20%20%3Fperson%20wikibase%3Asitelinks%20%3Flinkcount.%0A%20%20SERVICE%20wikibase%3Alabel%20%7B%20bd%3AserviceParam%20wikibase%3Alanguage%20%22%5BAUTO_LANGUAGE%5D%2Cmul%2Cen%2Cde%2Ces%2Car%2Cfr%22.%20%7D%0A%20%20OPTIONAL%20%7B%20%20%7D%0A%7D%0AGROUP%20BY%20%3Flinkcount%20%3Fperson%20%3FpersonLabel%20%3Fparent%20%3FparentLabel%0AORDER%20BY%20DESC%20(%3Flinkcount)%0ALIMIT%20100" referrerpolicy="origin" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>
+      </div>
+
+      <div class="note">
+        Dans Wikidata : <b>Lien → Intégrer (Embed)</b> puis copie le <code>src</code>.
+      </div>
+    </section>
+
+    <!-- 2) RAWGRAPHS -->
+    <section>
+      <h2>Graphique 2 — RAWGraphs</h2>
+    
+      <img
+        src="e01graphique.png"
+        alt="Graphique RAWGraphs"
+        style="width:100%; max-width:1200px; height:auto; border:1px solid #ddd; border-radius:10px;">
+    </section>
+    
+
+  </main>
+
+  <footer>
+    À mettre sur GitHub Pages : <code>index.html</code> + <code>rawgraphs.svg</code>.
+  </footer>
+</body>
+</html>
