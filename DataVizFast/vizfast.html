@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DataViz Fast | Clusters & Image Extractor</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    :root { --bg: #000000; --side: #121212; --accent: #1DB954; --card: #181818; }
+    body, html { margin: 0; padding: 0; height: 100%; background: var(--bg); color: white; font-family: 'Circular', sans-serif, Arial; overflow: hidden; }
+    
+    #app { display: flex; height: 100vh; width: 100vw; }
+    
+    #sidebar { 
+      width: 300px; min-width: 300px; background: var(--side); padding: 20px;
+      display: flex; flex-direction: column; gap: 15px; border-right: 1px solid #282828;
+      position: relative; box-sizing: border-box;
+    }
+
+    .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    
+    .btn-help {
+      background: #282828; color: var(--accent); border: 1.5px solid var(--accent); 
+      width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-weight: bold;
+    }
+
+    #help-panel {
+      position: absolute; top: 15px; left: 320px; width: 280px;
+      background: rgba(18, 18, 18, 0.95); border: 1px solid var(--accent);
+      padding: 20px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+      z-index: 2000; display: none; backdrop-filter: blur(8px);
+    }
+
+    .widget { background: var(--card); padding: 15px; border-radius: 8px; }
+    h2 { font-size: 11px; text-transform: uppercase; color: #b3b3b3; margin: 0 0 10px; letter-spacing: 1px; }
+    
+    select, input[type="file"] { 
+      width: 100%; background: #282828; border: none; color: white; 
+      padding: 10px; border-radius: 4px; font-size: 13px; outline: none;
+    }
+
+    /* --- SECTION BAS DE PAGE (MAPPING & EXPORT) --- */
+    .bottom-controls { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding-top: 15px; border-top: 1px solid #282828; }
+    
+    .btn-action {
+      width: 100%; background: transparent; color: white; border: 1px solid #444;
+      padding: 10px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold;
+      transition: all 0.2s;
+    }
+    .btn-action:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-download { background: var(--accent); color: black; border: none; }
+
+    /* --- GALERIE OVERLAY --- */
+    #gallery-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.95);
+      display: none; flex-direction: column; padding: 40px; z-index: 3000;
+    }
+    .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 20px; overflow-y: auto; margin: 20px 0; }
+    .img-card { background: #181818; border: 2px solid #333; border-radius: 8px; overflow: hidden; cursor: pointer; transition: 0.2s; }
+    .img-card.selected { border-color: var(--accent); transform: scale(1.03); }
+    .img-card img { width: 100%; height: 150px; object-fit: cover; pointer-events: none; }
+
+    #viz-container { flex-grow: 1; position: relative; cursor: crosshair; }
+    #canvas-host { width: 100%; height: 100%; }
+
+    #legend {
+      position: absolute; top: 20px; right: 20px;
+      background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px;
+      max-height: 80vh; overflow-y: auto; display: none;
+    }
+    .legend-item { display: flex; align-items: center; gap: 10px; font-size: 12px; margin-bottom: 5px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    #tooltip {
+      position: fixed; background: #282828; padding: 12px; border-radius: 4px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5); pointer-events: none;
+      display: none; z-index: 100; min-width: 150px; border: 1px solid #333;
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <aside id="sidebar">
+    <div class="header-row">
+      <div style="font-size: 22px; font-weight: bold; color: var(--accent);">DataViz <span style="color:white">Fast</span></div>
+      <button class="btn-help" id="openHelp">?</button>
+    </div>
+
+    <div id="help-panel">
+      <h3>Guide Rapide</h3>
+      <p>Voici comment explorer vos données :</p>
+      <ul style="padding-left: 18px; margin: 10px 0;">
+        <li><strong>Clusters</strong> : Regroupement automatique.</li>
+        <li><strong>Taille</strong> : Basée sur vos chiffres.</li>
+        <li><strong>Images</strong> : Utilisez le bouton en bas pour extraire les visuels.</li>
+      </ul>
+      <button onclick="document.getElementById('help-panel').style.display='none'" style="width:100%; background:var(--accent); border:none; padding:8px; border-radius:4px; cursor:pointer; font-weight:bold;">Fermer</button>
+    </div>
+    
+    <div class="widget">
+      <h2>Importer CSV</h2>
+      <input type="file" id="csvIn" accept=".csv" />
+    </div>
+
+    <div id="ui" style="display:none">
+      <div class="widget">
+        <h2>Configuration</h2>
+        <label style="font-size:11px; color:#b3b3b3">GROUPER PAR (COULEUR)</label>
+        <select id="sel-color" style="margin-bottom:15px;"></select>
+        
+        <label style="font-size:11px; color:#b3b3b3">TAILLE DES BULLES</label>
+        <select id="sel-size" style="margin-bottom:15px;"></select>
+        
+        <label style="font-size:11px; color:#b3b3b3">LIBELLÉ (NOM)</label>
+        <select id="sel-label"></select>
+      </div>
+    </div>
+
+    <div class="bottom-controls">
+      <h2>Format d'export</h2>
+      <select id="exportFmt">
+        <option value="png">PNG (Haute Qualité)</option>
+        <option value="jpeg">JPEG (Compressé)</option>
+      </select>
+      <button class="btn-action" id="detectImgsBtn">Détecter Images</button>
+      <button class="btn-action btn-download" id="dlVizBtn">Télécharger Viz</button>
+    </div>
+  </aside>
+
+  <main id="viz-container">
+    <div id="canvas-host"></div>
+    <div id="legend"></div>
+  </main>
+</div>
+
+<div id="gallery-overlay">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+    <h2>Images extraites du CSV</h2>
+    <button class="btn-action" onclick="document.getElementById('gallery-overlay').style.display='none'" style="width:auto; padding:5px 20px;">Fermer</button>
+  </div>
+  <div class="gallery-grid" id="galleryGrid"></div>
+  <div style="display:flex; justify-content:flex-end; gap:15px;">
+    <button class="btn-action btn-download" id="dlSelectionBtn" style="width:auto; padding:10px 30px;">Télécharger la sélection</button>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+let rawData = [];
+let headers = [];
+let nodes = [];
+let groups = {};
+let config = { label: '', size: '', color: '' };
+let palette = ["#1DB954", "#1ed760", "#3d91ff", "#f573a0", "#ffd700", "#ff5722", "#9c27b0", "#00bcd4"];
+let p5Canvas;
+let selectedImgs = new Set();
+
+function setup() {
+  const host = document.getElementById('canvas-host');
+  p5Canvas = createCanvas(host.offsetWidth, host.offsetHeight).parent(host);
+  
+  document.getElementById('openHelp').addEventListener('click', () => {
+    const p = document.getElementById('help-panel');
+    p.style.display = (p.style.display === 'block') ? 'none' : 'block';
+  });
+
+  document.getElementById('csvIn').addEventListener('change', e => {
+    if (e.target.files[0]) parseCSV(e.target.files[0]);
+  });
+
+  // Export de la visualisation
+  document.getElementById('dlVizBtn').addEventListener('click', () => {
+    const fmt = document.getElementById('exportFmt').value;
+    saveCanvas(p5Canvas, 'mon_graphique', fmt);
+  });
+
+  // Détection des images
+  document.getElementById('detectImgsBtn').addEventListener('click', () => {
+    if (rawData.length === 0) return alert("Chargez un fichier d'abord.");
+    openGallery();
+  });
+
+  // Télécharger la sélection
+  document.getElementById('dlSelectionBtn').addEventListener('click', () => {
+    if (selectedImgs.size === 0) return alert("Sélectionnez des images.");
+    selectedImgs.forEach(url => {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'export_img';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
+  });
+
+  ['sel-label', 'sel-size', 'sel-color'].forEach(id => {
+    document.getElementById(id).addEventListener('change', (e) => {
+      config[id.split('-')[1]] = e.target.value;
+      initNodes();
+    });
+  });
+}
+
+function parseCSV(file) {
+  Papa.parse(file, {
+    header: true, dynamicTyping: true, skipEmptyLines: true,
+    complete: (res) => {
+      rawData = res.data;
+      headers = res.meta.fields;
+      setupMenus();
+      document.getElementById('ui').style.display = 'block';
+      initNodes();
+    }
+  });
+}
+
+function openGallery() {
+  const grid = document.getElementById('galleryGrid');
+  const overlay = document.getElementById('gallery-overlay');
+  grid.innerHTML = "";
+  selectedImgs.clear();
+  
+  let urlsFound = [];
+  rawData.forEach(row => {
+    headers.forEach(h => {
+      let val = String(row[h]);
+      if (val.includes('http') || val.match(/\.(jpeg|jpg|png|webp|gif)$/i)) {
+        if (!urlsFound.includes(val)) urlsFound.push(val);
+      }
+    });
+  });
+
+  if (urlsFound.length === 0) return alert("Aucune image détectée dans les colonnes.");
+
+  urlsFound.forEach(url => {
+    const card = document.createElement('div');
+    card.className = 'img-card';
+    card.innerHTML = `<img src="${url}" onerror="this.parentElement.style.display='none'">`;
+    card.onclick = () => {
+      card.classList.toggle('selected');
+      if (card.classList.contains('selected')) selectedImgs.add(url);
+      else selectedImgs.delete(url);
+    };
+    grid.appendChild(card);
+  });
+  overlay.style.display = 'flex';
+}
+
+function setupMenus() {
+  ['label', 'size', 'color'].forEach(k => {
+    const s = document.getElementById(`sel-${k}`);
+    s.innerHTML = '<option value="">-- Aucun --</option>';
+    headers.forEach(h => s.innerHTML += `<option value="${h}">${h}</option>`);
+  });
+
+  config.label = headers.find(h => /name|title|nom/i.test(h)) || headers[0];
+  config.color = headers.find(h => /genre|category|type|country|itemLabel/i.test(h)) || '';
+  config.size = headers.find(h => typeof rawData[0][h] === 'number') || '';
+
+  document.getElementById('sel-label').value = config.label;
+  document.getElementById('sel-color').value = config.color;
+  document.getElementById('sel-size').value = config.size;
+}
+
+function initNodes() {
+  nodes = [];
+  groups = {};
+  const sKey = config.size;
+  const cKey = config.color;
+  
+  let uniqueGroups = [...new Set(rawData.map(d => String(d[cKey] || 'Autre')))];
+  uniqueGroups.forEach((g, i) => {
+    let angle = (TWO_PI / uniqueGroups.length) * i;
+    let dist = min(width, height) * 0.25;
+    groups[g] = {
+      x: width/2 + cos(angle) * dist,
+      y: height/2 + sin(angle) * dist,
+      color: palette[i % palette.length]
+    };
+  });
+
+  const maxV = sKey ? Math.max(...rawData.map(d => parseFloat(d[sKey]) || 0)) : 1;
+
+  nodes = rawData.map(d => {
+    const gName = String(d[cKey] || 'Autre');
+    const val = parseFloat(d[sKey]) || 0;
+    const rTarget = sKey ? map(Math.sqrt(val), 0, Math.sqrt(maxV), 4, 25) : 8;
+    
+    return {
+      x: width/2 + random(-50, 50),
+      y: height/2 + random(-50, 50),
+      r: 0, 
+      tr: rTarget,
+      group: gName,
+      data: d
+    };
+  });
+  updateLegend(uniqueGroups);
+}
+
+function updateLegend(uniqueGroups) {
+  const leg = document.getElementById('legend');
+  leg.style.display = config.color ? 'block' : 'none';
+  leg.innerHTML = '<h2>Légende</h2>';
+  uniqueGroups.forEach(g => {
+    leg.innerHTML += `<div class="legend-item"><span class="dot" style="background:${groups[g].color}"></span>${g}</div>`;
+  });
+}
+
+function draw() {
+  background(0);
+  if (nodes.length === 0) return;
+
+  let hovered = null;
+
+  for (let i = 0; i < nodes.length; i++) {
+    let n = nodes[i];
+    let g = groups[n.group] || {x: width/2, y: height/2, color: '#fff'};
+
+    n.x = lerp(n.x, g.x, 0.02);
+    n.y = lerp(n.y, g.y, 0.02);
+    n.r = lerp(n.r, n.tr, 0.05);
+
+    for (let j = i + 1; j < nodes.length; j++) {
+      let other = nodes[j];
+      let d = dist(n.x, n.y, other.x, other.y);
+      let minDist = n.r + other.r + 2;
+      if (d < minDist) {
+        let angle = atan2(other.y - n.y, other.x - n.x);
+        let move = (minDist - d) * 0.15;
+        n.x -= cos(angle) * move;
+        n.y -= sin(angle) * move;
+        other.x += cos(angle) * move;
+        other.y += sin(angle) * move;
+      }
+    }
+
+    noStroke();
+    fill(red(color(g.color)), green(color(g.color)), blue(color(g.color)), 180);
+    ellipse(n.x, n.y, n.r * 2);
+
+    if (dist(mouseX, mouseY, n.x, n.y) < n.r) {
+      hovered = n;
+      stroke(255);
+      strokeWeight(2);
+      noFill();
+      ellipse(n.x, n.y, n.r * 2 + 6);
+    }
+  }
+
+  showTooltip(hovered);
+}
+
+function showTooltip(n) {
+  const tt = document.getElementById('tooltip');
+  if (n) {
+    tt.style.display = 'block';
+    tt.style.left = (mouseX + 20) + 'px';
+    tt.style.top = (mouseY + 20) + 'px';
+    tt.innerHTML = `
+      <div style="color:var(--accent); font-weight:bold; margin-bottom:5px;">${n.data[config.label] || 'Item'}</div>
+      <div style="font-size:11px; color:#b3b3b3">
+        ${config.color ? 'Groupe: ' + n.group : ''}<br>
+        ${config.size ? config.size + ': ' + n.data[config.size] : ''}
+      </div>
+    `;
+  } else {
+    tt.style.display = 'none';
+  }
+}
+
+function windowResized() {
+  const host = document.getElementById('canvas-host');
+  resizeCanvas(host.offsetWidth, host.offsetHeight);
+  initNodes();
+}
+</script>
+
+</body>
+</html>
